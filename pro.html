@@ -84,7 +84,7 @@
 <main>
   <div class="hero">
     <h1>Pro engine. <em>Cleaner hair, smarter cuts.</em></h1>
-    <p>This beta uses a much stronger AI model (RMBG-2.0) — better on hair and on tricky backgrounds like solid colour discs. First use downloads ~223 MB once; it then stays cached.</p>
+    <p>This beta uses a much stronger AI model (RMBG-1.4) — better on hair and on tricky backgrounds like solid colour discs. First use downloads ~42 MB once; it then stays cached.</p>
   </div>
 
   <div class="card">
@@ -147,7 +147,7 @@
 </main>
 
 <footer>
-  BG Remover Pro (beta) — engine: Bria RMBG-2.0, free for non-commercial use.<br>
+  BG Remover Pro (beta) — engine: Bria RMBG-1.4, free for non-commercial use.<br>
   Your images are processed locally and are never sent anywhere. Prefer the lighter engine? <a href="index.html">Standard BG Remover</a>
 </footer>
 
@@ -179,7 +179,7 @@ let originalURL = null, resultBlob = null, resultURL = null;
 let chosenBg = 'transparent';
 let modelBuf = null, session = null, engineUsed = '';
 
-const MODEL_URL = 'https://huggingface.co/briaai/RMBG-2.0/resolve/main/onnx/model_q4f16.onnx';
+const MODEL_URL = 'https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx';
 
 function showError(msg){
   stopScanLines();
@@ -216,7 +216,7 @@ async function fetchModel(){
   if (modelBuf) return modelBuf;
   const resp = await fetch(MODEL_URL);
   if (!resp.ok) throw new Error('Model download failed (HTTP ' + resp.status + ')');
-  const total = parseInt(resp.headers.get('Content-Length') || '0', 10) || 223000000;
+  const total = parseInt(resp.headers.get('Content-Length') || '0', 10) || 42000000;
   const reader = resp.body.getReader();
   const chunks = [];
   let got = 0;
