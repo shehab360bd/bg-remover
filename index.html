@@ -50,8 +50,8 @@
   #statustext{margin-top:9px; font-size:14px; color:var(--dim)}
   /* Processing stage */
   #stage{display:none; margin-top:20px}
-  .scanwrap{position:relative; max-width:520px; margin:0 auto; border-radius:12px; overflow:hidden; background:#222; box-shadow:0 0 0 1px var(--line)}
-  .scanwrap img{display:block; width:100%; height:auto}
+  .scanwrap{position:relative; width:fit-content; max-width:min(520px,100%); margin:0 auto; border-radius:12px; overflow:hidden; background:#222; box-shadow:0 0 0 1px var(--line)}
+  .scanwrap img{display:block; width:auto; height:auto; max-width:100%; max-height:440px}
   .scanbeam{position:absolute; left:0; right:0; height:24%; top:0; background:linear-gradient(180deg, rgba(230,51,41,0) 0%, rgba(230,51,41,.28) 62%, rgba(255,110,100,.85) 100%); animation:scanmove 1.5s ease-in-out infinite alternate; pointer-events:none; will-change:transform; transform:translateZ(0)}
   @keyframes scanmove{from{transform:translateY(-110%)} to{transform:translateY(430%)}}
   .scanwrap::after{content:''; position:absolute; inset:0; border:2px solid rgba(230,51,41,.65); border-radius:12px; animation:framepulse 1.5s ease-in-out infinite; pointer-events:none}
@@ -72,8 +72,8 @@
   #error{display:none; margin-top:18px; background:#2a1414; border:1px solid #6e2a24; color:#ffb4ab; border-radius:12px; padding:14px 16px; font-size:14px; line-height:1.5; white-space:pre-line}
   /* Result */
   #result{display:none; margin-top:22px}
-  .compare{position:relative; width:100%; max-width:760px; margin:0 auto; border-radius:12px; overflow:hidden; background:#222; user-select:none; touch-action:none}
-  .compare img{display:block; width:100%; height:auto; pointer-events:none}
+  .compare{position:relative; width:100%; max-width:560px; margin:0 auto; border-radius:12px; overflow:hidden; background:#222; user-select:none; touch-action:none}
+  .compare img{display:block; width:100%; height:100%; pointer-events:none}
   .layer-after{position:absolute; inset:0}
   .layer-before{position:absolute; inset:0; clip-path:inset(0 calc(100% - var(--pos,50%)) 0 0)}
   .layer-after .bgfill{position:absolute; inset:0}
@@ -83,7 +83,7 @@
   .handle::after{content:'< >'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; color:#111; font-size:11px; font-weight:700; border-radius:99px; padding:5px 7px; letter-spacing:1px}
   .labels{position:absolute; top:10px; left:0; right:0; display:flex; justify-content:space-between; padding:0 12px; pointer-events:none}
   .labels span{background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:4px 10px; border-radius:99px}
-  input[type=range].slider{width:100%; max-width:760px; margin:14px auto 0; display:block; accent-color:var(--red)}
+  input[type=range].slider{width:100%; max-width:560px; margin:14px auto 0; display:block; accent-color:var(--red)}
   .bgrow{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; margin-top:18px}
   .bgrow .cap{font-size:14px; color:var(--dim); margin-right:2px}
   .swatch{width:34px; height:34px; border-radius:9px; border:2px solid #3a3a46; cursor:pointer; padding:0}
@@ -204,8 +204,9 @@
 </main>
 
 <footer>
-  BG Remover v1.6 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
+  BG Remover v1.7 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
   Your images are processed locally and are never sent anywhere.<br>
+  More free tools &amp; apps from Shehab360: <a href="https://shehab360.pages.dev/softwares/">shehab360.pages.dev/softwares</a><br>
   Need stronger quality for hair and tricky backgrounds? <a href="pro.html">Try the Pro engine (beta)</a>
 </footer>
 
@@ -216,6 +217,29 @@
     "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0-dev.20250206-d981b153d3/dist/ort.webgpu.bundle.min.mjs"
   }
 }
+</script>
+<script>
+/* Keep the AI model files in Cache Storage. The model CDN sends no
+   cache headers, so without this layer the browser throws the
+   ~80 MB download away and fetches it again on every visit. */
+(function(){
+  if (!('caches' in window) || !window.fetch) return;
+  var CACHE = 'bgr-models-v1';
+  var origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    var url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.indexOf('staticimgly.com') === -1) return origFetch(input, init);
+    return caches.open(CACHE).then(function(cache){
+      return cache.match(url).then(function(hit){
+        if (hit) return hit;
+        return origFetch(input, init).then(function(resp){
+          if (resp && resp.ok) { try { cache.put(url, resp.clone()); } catch (e) {} }
+          return resp;
+        });
+      });
+    }).catch(function(){ return origFetch(input, init); });
+  };
+})();
 </script>
 <script type="module">
 import { removeBackground } from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/index.mjs";
@@ -322,17 +346,35 @@ async function process(source){
   setProgress(0, 'Starting…');
   try {
     const gpuOk = !!navigator.gpu;
+    let gpuBad = false;
+    try { gpuBad = localStorage.getItem('bgr_gpu_bad') === '1'; } catch (e) {}
     try {
-      engine = gpuOk ? 'gpu' : 'cpu';
+      engine = (gpuOk && !gpuBad) ? 'gpu' : 'cpu';
       resultBlob = await removeBackground(source, mkConfig(engine));
     } catch (firstErr) {
-      if (!gpuOk) throw firstErr;
+      if (!gpuOk || gpuBad) throw firstErr;
       console.error('GPU mode failed, falling back to CPU:', firstErr);
       engine = 'cpu (GPU fallback)';
       downloads.clear();
       stopScanLines(); scanStarted = false;
       setProgress(null, 'Fast mode is unavailable on this device — switching to standard mode…');
       resultBlob = await removeBackground(source, mkConfig('cpu'));
+    }
+    /* A GPU run can also fail SILENTLY on some graphics drivers: it
+       finishes without an error but hands back an empty (or solid)
+       cutout. Check the result's alpha; if it is degenerate, redo the
+       job on the CPU path and remember this device cannot be trusted
+       with the GPU path. */
+    if (engine === 'gpu') {
+      const stats = await alphaStats(resultBlob).catch(() => null);
+      if (stats && (stats.transp > 0.995 || stats.opaque > 0.995)) {
+        console.error('GPU mode returned an empty cutout, redoing on CPU:', stats);
+        try { localStorage.setItem('bgr_gpu_bad', '1'); } catch (e) {}
+        engine = 'cpu (GPU gave an empty result)';
+        stopScanLines(); scanStarted = false;
+        setProgress(null, 'The fast mode glitched on this device — redoing it the standard way…');
+        resultBlob = await removeBackground(source, mkConfig('cpu'));
+      }
     }
     stopScanLines();
     if ($('refine').checked) {
@@ -356,6 +398,27 @@ async function process(source){
     const detail = (err && err.name ? err.name + ': ' : '') + (err && err.message ? err.message : String(err));
     showError('Something went wrong while ' + stage + ' (engine: ' + engine + '). Please screenshot the line below and send it to us — it tells us exactly what to fix. You can also try again, or switch Quality to "Fast".\n\nTechnical detail: ' + detail);
   }
+}
+
+/* Sampled alpha statistics of a result PNG: what fraction of pixels
+   is (nearly) transparent / (nearly) opaque. A healthy cutout of a
+   normal photo sits well inside both extremes. */
+async function alphaStats(blob){
+  const bmp = await createImageBitmap(blob);
+  const S = 96;
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = Math.max(1, Math.round(S * bmp.height / bmp.width));
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+  let transp = 0, opaque = 0;
+  const n = cv.width * cv.height;
+  for (let i = 3; i < d.length; i += 4) {
+    if (d[i] < 12) transp++;
+    else if (d[i] > 242) opaque++;
+  }
+  return { transp: transp / n, opaque: opaque / n };
 }
 
 async function refineEdges(blob){
@@ -393,6 +456,22 @@ async function refineEdges(blob){
   return out || blob;
 }
 
+/* Fit the compare box to the image's own aspect inside a modest
+   stage (at most 560 x 460 px), so a tall phone photo no longer
+   fills the whole screen. */
+function fitCompare(){
+  const w = imgAfter.naturalWidth, h = imgAfter.naturalHeight;
+  if (!w || !h) return;
+  const avail = compare.parentElement ? compare.parentElement.clientWidth : 560;
+  const maxW = Math.min(560, avail);
+  const maxH = 460;
+  const s = Math.min(maxW / w, maxH / h);
+  compare.style.width = Math.round(w * s) + 'px';
+  compare.style.height = Math.round(h * s) + 'px';
+}
+imgAfter.addEventListener('load', fitCompare);
+window.addEventListener('resize', fitCompare);
+
 function showSession(i){
   const sess = sessions[i];
   if (!sess) return;
@@ -401,6 +480,7 @@ function showSession(i){
   imgBefore.src = sess.origURL;
   imgAfter.src = sess.resultURL;
   imgAfterBase.src = sess.resultURL; // sizes the compare box
+  fitCompare();
   applyBg(sess.bg);
   document.querySelectorAll('.thumb').forEach((t, j) => t.classList.toggle('active', j === i));
 }
