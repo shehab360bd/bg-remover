@@ -106,6 +106,7 @@
   </div>
 
   <div class="card">
+    <div id="picker">
     <div id="dropzone" tabindex="0" role="button" aria-label="Upload an image">
       <div class="big">Drop an image here, or click to choose one</div>
       <div class="small">JPG, PNG or WebP &middot; You can also paste (Ctrl+V)</div>
@@ -126,6 +127,7 @@
     <div class="urlrow">
       <input type="url" id="urlinput" placeholder="…or paste an image link here (https://example.com/photo.jpg)" aria-label="Image link">
       <button class="btn secondary" id="urlBtn" type="button">Remove from link</button>
+    </div>
     </div>
 
     <div id="stage">
@@ -192,7 +194,7 @@
 </main>
 
 <footer>
-  BG Remover v1.3 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
+  BG Remover v1.4 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
   Your images are processed locally and are never sent anywhere.
 </footer>
 
@@ -214,6 +216,7 @@ const errorBox = $('error'), resultBox = $('result');
 const imgBefore = $('imgBefore'), imgAfter = $('imgAfter'), imgAfterBase = $('imgAfterBase');
 const bgfill = $('bgfill'), compare = $('compare');
 const stageBox = $('stage'), stageImg = $('stageImg');
+const picker = $('picker');
 const urlinput = $('urlinput');
 
 let originalURL = null, resultBlob = null, resultURL = null;
@@ -222,9 +225,11 @@ let chosenBg = 'transparent';
 function showError(msg){
   stopScanLines();
   stageBox.style.display = 'none';
+  picker.style.display = 'block';
   errorBox.style.display = 'block';
   errorBox.textContent = msg;
   statusBox.style.display = 'none';
+  errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function clearError(){ errorBox.style.display = 'none'; }
 
@@ -253,6 +258,7 @@ async function process(source){
   clearError();
   stopScanLines();
   resultBox.style.display = 'none';
+  picker.style.display = 'none';
   if (originalURL) URL.revokeObjectURL(originalURL);
   if (resultURL) URL.revokeObjectURL(resultURL);
   resultBlob = null;
@@ -374,6 +380,7 @@ async function processFromURL(rawUrl){
   clearError();
   stopScanLines();
   resultBox.style.display = 'none';
+  picker.style.display = 'none';
   stageBox.style.display = 'none';
   setProgress(null, 'Loading the image from the link…');
   try {
@@ -465,6 +472,7 @@ $('downloadBtn').addEventListener('click', async () => {
 
 $('againBtn').addEventListener('click', () => {
   resultBox.style.display = 'none';
+  picker.style.display = 'block';
   dropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 </script>
