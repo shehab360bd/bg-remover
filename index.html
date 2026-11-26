@@ -52,7 +52,7 @@
   #stage{display:none; margin-top:20px}
   .scanwrap{position:relative; max-width:520px; margin:0 auto; border-radius:12px; overflow:hidden; background:#222; box-shadow:0 0 0 1px var(--line)}
   .scanwrap img{display:block; width:100%; height:auto}
-  .scanbeam{position:absolute; left:0; right:0; height:24%; top:0; background:linear-gradient(180deg, rgba(230,51,41,0) 0%, rgba(230,51,41,.30) 60%, rgba(255,110,100,.9) 100%); box-shadow:0 3px 22px rgba(230,51,41,.55); animation:scanmove 1.5s ease-in-out infinite alternate; pointer-events:none; will-change:transform}
+  .scanbeam{position:absolute; left:0; right:0; height:24%; top:0; background:linear-gradient(180deg, rgba(230,51,41,0) 0%, rgba(230,51,41,.28) 62%, rgba(255,110,100,.85) 100%); animation:scanmove 1.5s ease-in-out infinite alternate; pointer-events:none; will-change:transform; transform:translateZ(0)}
   @keyframes scanmove{from{transform:translateY(-110%)} to{transform:translateY(430%)}}
   .scanwrap::after{content:''; position:absolute; inset:0; border:2px solid rgba(230,51,41,.65); border-radius:12px; animation:framepulse 1.5s ease-in-out infinite; pointer-events:none}
   @keyframes framepulse{0%,100%{opacity:.35} 50%{opacity:1}}
@@ -204,7 +204,7 @@
 </main>
 
 <footer>
-  BG Remover v1.5 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
+  BG Remover v1.6 — a free tool. Background removal engine: IMG.LY background-removal (open source, AGPL).<br>
   Your images are processed locally and are never sent anywhere.<br>
   Need stronger quality for hair and tricky backgrounds? <a href="pro.html">Try the Pro engine (beta)</a>
 </footer>
@@ -266,6 +266,22 @@ function startScanLines(){
 }
 function stopScanLines(){ if (scanTimer) { clearInterval(scanTimer); scanTimer = null; } }
 
+function downscalePreview(url){
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const MAXW = 640;
+      if (im.naturalWidth <= MAXW) return;
+      const cv = document.createElement('canvas');
+      cv.width = MAXW;
+      cv.height = Math.round(im.naturalHeight * MAXW / im.naturalWidth);
+      cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+      stageImg.src = cv.toDataURL('image/jpeg', 0.85);
+    } catch (e) { /* keep the full-resolution preview */ }
+  };
+  im.src = url;
+}
+
 async function process(source){
   if (!source || !source.type || !source.type.startsWith('image/')) { showError('Please choose an image file (JPG, PNG or WebP).'); return; }
   clearError();
@@ -276,6 +292,7 @@ async function process(source){
   originalURL = URL.createObjectURL(source);
   imgBefore.src = originalURL;
   stageImg.src = originalURL;
+  downscalePreview(originalURL);
   stageBox.style.display = 'block';
   stageBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
