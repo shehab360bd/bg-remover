@@ -266,6 +266,49 @@ async function toTensor(bmp){
   return new ort.Tensor('float32', data, [1, 3, S, S]);
 }
 
+function cleanMask(A, w, h){
+  // 1) Remove small disconnected islands (specks of background the model kept)
+  const n = w * h;
+  const labels = new Int32Array(n).fill(-1);
+  const sizes = [];
+  const stack = [];
+  for (let s0 = 0; s0 < n; s0++) {
+    if (A[s0] <= 0.5 || labels[s0] !== -1) continue;
+    const id = sizes.length;
+    let size = 0;
+    stack.length = 0;
+    stack.push(s0); labels[s0] = id;
+    while (stack.length) {
+      const p = stack.pop(); size++;
+      const x = p % w, y = (p / w) | 0;
+      if (x > 0     && labels[p - 1] === -1 && A[p - 1] > 0.5) { labels[p - 1] = id; stack.push(p - 1); }
+      if (x < w - 1 && labels[p + 1] === -1 && A[p + 1] > 0.5) { labels[p + 1] = id; stack.push(p + 1); }
+      if (y > 0     && labels[p - w] === -1 && A[p - w] > 0.5) { labels[p - w] = id; stack.push(p - w); }
+      if (y < h - 1 && labels[p + w] === -1 && A[p + w] > 0.5) { labels[p + w] = id; stack.push(p + w); }
+    }
+    sizes.push(size);
+  }
+  if (sizes.length > 1) {
+    let biggest = 0;
+    for (let i = 1; i < sizes.length; i++) if (sizes[i] > sizes[biggest]) biggest = i;
+    const minKeep = Math.max(400, sizes[biggest] * 0.002);
+    for (let p = 0; p < n; p++) {
+      const lb = labels[p];
+      if (lb !== -1 && lb !== biggest && sizes[lb] < minKeep) A[p] = 0;
+    }
+  }
+  // 2) Gentle partial erosion: pulls back colour-fringed edge pixels
+  const src = Float32Array.from(A);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let m = 1;
+    for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; if (xx < 0 || xx >= w) continue;
+        const v = src[yy * w + xx]; if (v < m) m = v; } }
+    const a = src[y * w + x];
+    A[y * w + x] = a - (a - m) * 0.45;
+  }
+}
+
 async function removePro(blob){
   const sess = await getSession();
   const bmp = await createImageBitmap(blob);
@@ -280,14 +323,16 @@ async function removePro(blob){
   // RMBG-1.4's output node is itself a sigmoid: values are already
   // probabilities in 0..1. Use them as-is — applying sigmoid again would
   // squash the mask into a narrow semi-transparent band.
+  const A = new Float32Array(mw * mh);
+  for (let i = 0; i < mw * mh; i++) A[i] = Math.min(1, Math.max(0, md[i]));
+  cleanMask(A, mw, mh);
   const maskCv = document.createElement('canvas');
   maskCv.width = mw; maskCv.height = mh;
   const mctx = maskCv.getContext('2d');
   const img = mctx.createImageData(mw, mh);
   for (let i = 0; i < mw * mh; i++) {
-    const v = md[i];
     img.data[i * 4] = 255; img.data[i * 4 + 1] = 255; img.data[i * 4 + 2] = 255;
-    img.data[i * 4 + 3] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+    img.data[i * 4 + 3] = Math.round(A[i] * 255);
   }
   mctx.putImageData(img, 0, 0);
   const outCv = document.createElement('canvas');
