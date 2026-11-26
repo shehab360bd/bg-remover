@@ -147,7 +147,7 @@
 </main>
 
 <footer>
-  BG Remover Pro (beta) — engine: Bria RMBG-1.4, free for non-commercial use.<br>
+  BG Remover Pro (beta) v1.6 — engine: Bria RMBG-1.4, free for non-commercial use.<br>
   Your images are processed locally and are never sent anywhere. Prefer the lighter engine? <a href="index.html">Standard BG Remover</a>
 </footer>
 
@@ -208,12 +208,22 @@ function startScanLines(){
   stopScanLines();
   scanIdx = 0;
   statustext.textContent = scanLines[0];
-  scanTimer = setInterval(() => { scanIdx = (scanIdx + 1) % scanLines.length; statustext.textContent = scanLines[scanIdx]; }, 3500);
+  scanTimer = setInterval(() => { scanIdx = Math.min(scanIdx + 1, scanLines.length - 1); statustext.textContent = scanLines[scanIdx]; }, 3500);
 }
 function stopScanLines(){ if (scanTimer) { clearInterval(scanTimer); scanTimer = null; } }
 
+const MODEL_CACHE = 'bgpro-model-v1';
 async function fetchModel(){
   if (modelBuf) return modelBuf;
+  try {
+    const cache = await caches.open(MODEL_CACHE);
+    const hit = await cache.match(MODEL_URL);
+    if (hit) {
+      setProgress(null, 'Loading the Pro model from this device (saved last time)…');
+      modelBuf = new Uint8Array(await hit.arrayBuffer());
+      return modelBuf;
+    }
+  } catch (e) { /* Cache Storage unavailable — fall through to a normal download */ }
   const resp = await fetch(MODEL_URL);
   if (!resp.ok) throw new Error('Model download failed (HTTP ' + resp.status + ')');
   const total = parseInt(resp.headers.get('Content-Length') || '0', 10) || 42000000;
@@ -230,6 +240,10 @@ async function fetchModel(){
   modelBuf = new Uint8Array(got);
   let off = 0;
   for (const c of chunks) { modelBuf.set(c, off); off += c.length; }
+  try {
+    const cache = await caches.open(MODEL_CACHE);
+    await cache.put(MODEL_URL, new Response(modelBuf.slice(0), { headers: { 'Content-Type': 'application/octet-stream' } }));
+  } catch (e) { /* could not save the model — it will download again next time */ }
   return modelBuf;
 }
 
